@@ -1,0 +1,29 @@
+﻿@page "/"
+
+	<EditForm Model="Test" OnSubmit="HandleValidSubmit">
+		@for (int br = 0; br <= 8; br++)
+		{
+			<p>
+				<RadioDugme name="dugmici" SelectedValue="br" Vrednost="br" @bind-Value="Test.Broj" />
+				@br
+			</p>
+		}
+		<button type="submit">Posalji</button>
+	</EditForm>
+@Test.Broj
+
+
+@code
+{
+	public Bla Test { get; set; } = new Bla();
+
+	public void HandleValidSubmit()
+	{
+		StateHasChanged();
+	}
+
+	public class Bla
+	{
+		public int Broj { get; set; }
+	}
+}

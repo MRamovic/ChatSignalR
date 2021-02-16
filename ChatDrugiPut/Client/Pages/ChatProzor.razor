@@ -1,0 +1,131 @@
+﻿@using ChatDrugiPut.Shared
+@using Microsoft.AspNetCore.SignalR.Client
+
+	<div class="fleks">
+		<div>
+			<EditForm Model="SG">
+
+				@foreach (string s in Grupe.Keys)
+				{
+					<p>
+						<RadioDugme Vrednost="s" @bind-Value="SG.selGrupa" />
+						@s -- @Grupe[s]
+					</p>
+				}
+				@SG.selGrupa
+			</EditForm>
+			
+		</div>
+		<div>
+			<h3>ChatProzor</h3>
+			<p>Ulogovan korisnik: @UlogovanKorisnik.Username</p>
+			<div style="overflow-y: scroll;  max-height:200px">
+				@foreach (Poruka poruka in Istorija)
+				{
+					if (poruka.Grupa == null)
+						PorukaGrupa = "<global>";
+					else
+						PorukaGrupa = $"<{poruka.Grupa}>";
+
+					@if (poruka.Posiljaoc == null)
+					{
+						<p><b>SERVER</b><i>@PorukaGrupa</i>: @poruka.Sadrzaj</p>
+					}
+					else if (poruka.Posiljaoc.Equals(UlogovanKorisnik))
+					{
+						<p>Ja<i>@PorukaGrupa</i>: @poruka.Sadrzaj</p>
+					}
+					else
+					{
+						<p>@poruka.Posiljaoc.Username<i>@PorukaGrupa</i>: @poruka.Sadrzaj</p>
+					}
+				}
+			</div>
+			<p><input @bind-value="Tekst" /> <button @onclick="Posalji">Posalji</button></p>
+		</div>
+		</div>
+@code 
+{
+	public SelektorGrupa SG { get; set; } = new SelektorGrupa();
+	public class SelektorGrupa
+	{
+		public string selGrupa { get; set; }
+	}
+
+
+
+	public string PorukaGrupa { get; set; }
+	[Parameter]
+	public User UlogovanKorisnik { get; set; }
+
+	[Parameter]
+	public HubConnection cHub { get; set; }
+
+	public string Tekst { get; set; }
+
+
+	List<Poruka> Istorija = new List<Poruka>();
+	Dictionary<string, int> Grupe = new Dictionary<string, int>();
+
+
+	protected override async Task OnInitializedAsync()
+	{
+		cHub.On<Poruka>("PorukaKaKlijentu", p =>
+		{
+			Istorija.Add(p);
+			StateHasChanged();
+		});
+
+		cHub.On<List<string>, List<int>>("EvoGrupe", (g, k) =>
+		{
+			Grupe.Clear();
+			Grupe.Add("Globalno", 0);
+			SG.selGrupa = "Globalno";
+			for (int i = 0; i < g.Count; i++)
+			{
+				Grupe.Add(g[i], k[i]);
+			}
+			StateHasChanged();
+		});
+
+		cHub.On<string, int>("OsveziGrupu", (g, k) =>
+		{
+			if (Grupe.ContainsKey(g))
+			{
+				Grupe[g] = k;
+			} else
+			{
+				Grupe.Add(g, k);
+			}
+
+			StateHasChanged();
+		});
+
+		await cHub.SendAsync("DobaviGrupe", UlogovanKorisnik);
+
+	}
+
+	public async Task Posalji()
+	{
+		Poruka p = new Poruka(Tekst, UlogovanKorisnik, null);
+		Tekst = "";
+		if (p.Sadrzaj.StartsWith("/"))
+		{
+			if (p.Sadrzaj.Split(' ')[0] == "/join")
+			{
+				p.Sadrzaj = p.Sadrzaj.Split(' ')[1];
+				await cHub.SendAsync("Join", p);
+			} else if (p.Sadrzaj.Split(' ')[0] == "/leave")
+			{
+				p.Sadrzaj = p.Sadrzaj.Split(' ')[1];
+				await cHub.SendAsync("Leave", p);
+			} 
+			return;
+		}
+
+		if (SG.selGrupa != "Globalno")
+			p.Grupa = SG.selGrupa;
+		await cHub.SendAsync("PrimiPoruku", p);
+	}
+
+}
